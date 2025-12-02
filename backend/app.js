@@ -1,12 +1,16 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const cookieParser = require('cookie-parser');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// const routes = require('./routes');
-const errorHandler = require('./middleware/errorHandler');
+import routes from './routes/index.js';
+import errorHandler from './middleware/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -16,23 +20,30 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
-app.use(morgan('dev'));
 
-// Static Files
-// app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Logging
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
 
-// Routes
-// app.use('/api', routes);
+// Static files
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-// Error Handling
-// app.use(errorHandler);
+// API Routes
+app.use('/api/v1', routes);
 
-// 404 Handler
-// app.use('*', (req, res) => {
-//   res.status(404).json({ error: 'Route not found' });
-// });
+// Error handling middleware
+app.use(errorHandler);
 
-module.exports = app;
+// 404 Handler - CORRECT (without wildcard)
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`
+  });
+});
+
+export default app;
