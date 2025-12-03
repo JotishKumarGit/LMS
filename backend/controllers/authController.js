@@ -1,10 +1,21 @@
+// controllers/authController.js - COMPLETE FIXED VERSION
 import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
 import { generateToken } from '../utils/createToken.js';
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail
 } from '../services/emailService.js';
+
+// Helper functions (REPLACE model methods)
+const generateVerificationToken = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const generateResetToken = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 // @desc    Register user with email verification
 // @route   POST /api/v1/auth/register
@@ -22,22 +33,28 @@ export const register = async (req, res) => {
       });
     }
 
+    // ✅ Hash password MANUALLY (NO middleware)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // ✅ Generate verification token using helper
+    const verificationToken = generateVerificationToken();
+    const verificationExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
     // Create user
     const user = await User.create({
       name,
       email,
-      password,
-      role: role || 'student'
+      password: hashedPassword, // ✅ Already hashed
+      role: role || 'student',
+      emailVerificationToken: verificationToken,
+      emailVerificationExpire: verificationExpiry
     });
-
-    // Generate email verification token
-    const verificationToken = user.generateEmailVerificationToken();
-    await user.save();
 
     // Send verification email
     await sendVerificationEmail(user.email, user.name, verificationToken);
 
-    // Generate JWT token (but user can't login until email verified)
+    // Generate JWT token
     const token = generateToken(user._id, user.role);
 
     res.status(201).json({
@@ -147,8 +164,10 @@ export const resendVerification = async (req, res) => {
       });
     }
 
-    // Generate new verification token
-    const verificationToken = user.generateEmailVerificationToken();
+    // ✅ Generate new verification token using helper
+    const verificationToken = generateVerificationToken();
+    user.emailVerificationToken = verificationToken;
+    user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
     await user.save();
 
     // Send new verification email
@@ -183,8 +202,8 @@ export const login = async (req, res) => {
       });
     }
 
-    // Find user with password
-    const user = await User.findOne({ email }).select('+password');
+    // Find user
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({
@@ -193,8 +212,8 @@ export const login = async (req, res) => {
       });
     }
 
-    // Check password
-    const isMatch = await user.comparePassword(password);
+    // ✅ Compare password MANUALLY (NO model method)
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -256,8 +275,10 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate reset token
-    const resetToken = user.generateResetPasswordToken();
+    // ✅ Generate reset token using helper
+    const resetToken = generateResetToken();
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpire = Date.now() + 30 * 60 * 1000; // 30 minutes
     await user.save();
 
     // Send reset email
@@ -297,8 +318,12 @@ export const resetPassword = async (req, res) => {
       });
     }
 
+    // ✅ Hash new password MANUALLY
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
     // Set new password
-    user.password = newPassword;
+    user.password = hashedPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
@@ -313,6 +338,89 @@ export const resetPassword = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Server error during password reset'
+    });
+  }
+};
+
+// @desc    Get current user profile
+// @route   GET /api/v1/auth/me
+// @access  Private
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+        isEmailVerified: user.isEmailVerified,
+        bio: user.bio,
+        phone: user.phone
+      }
+    });
+
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error'
+    });
+  }
+};
+
+// @desc    Update user profile
+// @route   PUT /api/v1/auth/update-profile
+// @access  Private
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, bio, phone, address } = req.body;
+    
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Update fields
+    if (name) user.name = name;
+    if (bio) user.bio = bio;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        bio: user.bio,
+        phone: user.phone,
+        address: user.address
+      }
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error'
     });
   }
 };
