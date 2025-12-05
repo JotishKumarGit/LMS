@@ -6,8 +6,8 @@ import {
   resendVerification,
   forgotPassword,
   resetPassword,
-//   getMe,
-//   updateProfile,
+  getMe,
+  updateProfile,
 //   changePassword,
 //   logout
 } from '../controllers/authController.js';
@@ -24,8 +24,8 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
 // Protected routes
-// router.get('/me', protect, getMe);
-// router.put('/update-profile', protect, updateProfile);
+router.get('/me', protect, getMe);
+router.put('/update-profile', protect, updateProfile);
 // router.put('/change-password', protect, changePassword);
 // router.post('/logout', protect, logout);
 

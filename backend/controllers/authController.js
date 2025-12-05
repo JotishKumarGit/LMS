@@ -22,10 +22,12 @@ const generateResetToken = () => {
 // @access  Public
 export const register = async (req, res) => {
   try {
+    debugger;
     const { name, email, password, role } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
+ 
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -264,24 +266,42 @@ export const login = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+    
+    console.log('\n🔍 FORGOT PASSWORD DEBUG:');
+    console.log('Email received:', email);
 
     const user = await User.findOne({ email });
+    console.log('User found:', user ? 'YES' : 'NO');
 
     if (!user) {
-      // Don't reveal that user doesn't exist (security)
+      console.log('User not found - returning security message');
       return res.json({
         success: true,
         message: 'If your email is registered, you will receive a password reset link'
       });
     }
 
-    // ✅ Generate reset token using helper
-    const resetToken = generateResetToken();
+    // Generate reset token
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetExpiry = Date.now() + 30 * 60 * 1000; // 30 minutes
+    
+    console.log('Generated Token:', resetToken);
+    console.log('Expiry Time:', new Date(resetExpiry).toISOString());
+
+    // Save token to user
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpire = Date.now() + 30 * 60 * 1000; // 30 minutes
+    user.resetPasswordExpire = resetExpiry;
     await user.save();
+    
+    console.log('Token saved to database');
+    
+    // Check if token actually saved
+    const updatedUser = await User.findOne({ email });
+    console.log('Stored Token:', updatedUser.resetPasswordToken);
+    console.log('Stored Expiry:', updatedUser.resetPasswordExpire);
 
     // Send reset email
+    console.log('Attempting to send email...');
     await sendPasswordResetEmail(user.email, user.name, resetToken);
 
     res.json({
@@ -290,7 +310,8 @@ export const forgotPassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('❌ Forgot password error:', error.message);
+    console.error('Full error:', error);
     res.status(500).json({
       success: false,
       error: 'Server error during password reset'
@@ -304,29 +325,63 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, token, newPassword } = req.body;
+    
+    console.log('\n🔍 RESET PASSWORD DEBUG:');
+    console.log('Email:', email);
+    console.log('Token received:', token);
+    console.log('Current time:', Date.now());
+    console.log('Current time (ISO):', new Date().toISOString());
 
-    const user = await User.findOne({
-      email,
-      resetPasswordToken: token,
-      resetPasswordExpire: { $gt: Date.now() }
-    });
-
+    // First find user by email
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    console.log('User found:', user ? 'YES' : 'NO');
+    
     if (!user) {
+      console.log('❌ User not found with email:', email);
       return res.status(400).json({
         success: false,
         error: 'Invalid or expired reset token'
       });
     }
 
-    // ✅ Hash new password MANUALLY
+    console.log('User resetToken:', user.resetPasswordToken);
+    console.log('User resetExpire:', user.resetPasswordExpire);
+    console.log('Is token expired?', user.resetPasswordExpire < Date.now());
+    console.log('Token matches?', user.resetPasswordToken === token);
+
+    // Check token and expiry
+    if (!user.resetPasswordToken || 
+        !user.resetPasswordExpire || 
+        user.resetPasswordToken !== token || 
+        user.resetPasswordExpire < Date.now()) {
+      
+      console.log('❌ Token validation failed:');
+      console.log('   - Has token?', !!user.resetPasswordToken);
+      console.log('   - Has expiry?', !!user.resetPasswordExpire);
+      console.log('   - Token match?', user.resetPasswordToken === token);
+      console.log('   - Not expired?', user.resetPasswordExpire >= Date.now());
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token'
+      });
+    }
+
+    console.log('✅ Token validation passed');
+    console.log('Hashing new password...');
+
+    // Hash new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Set new password
+    // Update user
     user.password = hashedPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
+
+    console.log('✅ Password reset successful');
+    console.log('New password saved');
 
     res.json({
       success: true,
@@ -334,7 +389,7 @@ export const resetPassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('❌ Reset password error:', error);
     res.status(500).json({
       success: false,
       error: 'Server error during password reset'
