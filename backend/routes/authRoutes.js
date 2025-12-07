@@ -1,13 +1,5 @@
 import express from 'express';
-import {
-  register,
-  login,
-  verifyEmail,
-  resendVerification,
-  forgotPassword,
-  resetPassword,
-  getMe,
-  updateProfile,
+import {register,login,verifyEmail,resendVerification,forgotPassword,resetPassword,getMe,updateProfile,
 //   changePassword,
 //   logout
 } from '../controllers/authController.js';

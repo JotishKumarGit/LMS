@@ -2,11 +2,7 @@
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../utils/createToken.js';
-import {
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-  sendWelcomeEmail
-} from '../services/emailService.js';
+import {sendVerificationEmail,sendPasswordResetEmail,sendWelcomeEmail} from '../services/emailService.js';
 
 // Helper functions (REPLACE model methods)
 const generateVerificationToken = () => {
