@@ -1,7 +1,8 @@
 import express from 'express';
-import {register,login,verifyEmail,resendVerification,forgotPassword,resetPassword,getMe,updateProfile,
-//   changePassword,
-//   logout
+import {register,login,verifyEmail,resendVerification,forgotPassword,resetPassword,getMe,updateProfile,getSessions,        
+  terminateAllSessions,
+  changePassword,
+  logout
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -18,7 +19,9 @@ router.post('/reset-password', resetPassword);
 // Protected routes
 router.get('/me', protect, getMe);
 router.put('/update-profile', protect, updateProfile);
-// router.put('/change-password', protect, changePassword);
-// router.post('/logout', protect, logout);
+router.put('/change-password', protect, changePassword);
+router.post('/logout', protect, logout);
+router.get('/sessions', protect, getSessions);
+router.post('/terminate-all-sessions', protect, terminateAllSessions);
 
 export default router;

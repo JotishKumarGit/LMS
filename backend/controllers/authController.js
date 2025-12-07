@@ -475,3 +475,183 @@ export const updateProfile = async (req, res) => {
     });
   }
 };
+
+
+// controllers/authController.js - ADD THESE FUNCTIONS AT THE BOTTOM
+
+// @desc    Change password
+// @route   PUT /api/v1/auth/change-password
+// @access  Private
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    
+    // Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide current password, new password and confirmation'
+      });
+    }
+    
+    // Check if new password matches confirmation
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password and confirmation do not match'
+      });
+    }
+    
+    // Check if new password is different from current
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be different from current password'
+      });
+    }
+    
+    // Password strength validation
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 6 characters long'
+      });
+    }
+    
+    // Get user
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+    
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    
+    // Update password
+    user.password = hashedPassword;
+    user.passwordChangedAt = Date.now();
+    await user.save();
+    
+    // Optionally: Invalidate all existing tokens (for security)
+    // user.refreshTokens = [];
+    // await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+    
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error during password change'
+    });
+  }
+};
+
+// @desc    Logout user (invalidate token on client side)
+// @route   POST /api/v1/auth/logout
+// @access  Private
+export const logout = async (req, res) => {
+  try {
+    // For JWT tokens (stateless), we just clear client-side token
+    // If you want server-side token invalidation, implement token blacklist
+    
+    // Optional: Clear refresh tokens if you're using them
+    // const user = await User.findById(req.user.id);
+    // user.refreshTokens = [];
+    // await user.save();
+    
+    // Clear token cookie if using cookies
+    res.clearCookie('token');
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error during logout'
+    });
+  }
+};
+
+// @desc    Get user sessions (if implementing session management)
+// @route   GET /api/v1/auth/sessions
+// @access  Private
+export const getSessions = async (req, res) => {
+  try {
+    // This is optional - if you want to track active sessions
+    const user = await User.findById(req.user.id).select('lastLogin loginHistory');
+    
+    res.json({
+      success: true,
+      sessions: user.loginHistory || [],
+      lastLogin: user.lastLogin
+    });
+    
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error'
+    });
+  }
+};
+
+// @desc    Terminate all sessions (logout from all devices)
+// @route   POST /api/v1/auth/terminate-all-sessions
+// @access  Private
+export const terminateAllSessions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    // Update last password change to invalidate all existing tokens
+    user.passwordChangedAt = Date.now();
+    
+    // Clear refresh tokens if using
+    // user.refreshTokens = [];
+    
+    // Update login history
+    if (!user.loginHistory) user.loginHistory = [];
+    user.loginHistory.push({
+      action: 'all_sessions_terminated',
+      timestamp: new Date(),
+      ip: req.ip
+    });
+    
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'All sessions terminated. Please login again.'
+    });
+    
+  } catch (error) {
+    console.error('Terminate sessions error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error'
+    });
+  }
+};
+
