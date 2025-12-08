@@ -1,5 +1,14 @@
 import express from 'express';
-import {register,login,verifyEmail,resendVerification,forgotPassword,resetPassword,getMe,updateProfile,getSessions,        
+import {
+  register,
+  login,
+  verifyEmail,
+  resendVerification,
+  forgotPassword,
+  resetPassword,
+  getMe,
+  updateProfile,
+  getSessions,        
   terminateAllSessions,
   changePassword,
   logout
